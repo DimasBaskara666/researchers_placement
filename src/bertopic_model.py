@@ -45,9 +45,15 @@ def fit_bertopic(
         verbose=False,
     )
     if embeddings is None:
-        model.fit(documents)
-    else:
-        model.fit(documents, embeddings=embeddings)
+        embeddings = embedding_model.encode(documents, show_progress_bar=False)
+    model.fit(documents, embeddings=embeddings)
+    reduced_topics = model.reduce_outliers(
+        documents,
+        model.topics_,
+        strategy="embeddings",
+        embeddings=embeddings,
+    )
+    model.update_topics(documents, topics=reduced_topics)
     return model
 
 

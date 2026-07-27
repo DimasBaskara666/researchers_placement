@@ -18,10 +18,10 @@ from topic_utils import coherence_cv
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-LDA_TOPICS = [18,20,22,24,26,28,30]
-NMF_TOPICS = [5,7,10,12,15,20]
-BERTOPIC_MIN_TOPIC_SIZES = [20,25,30,35,40]
-BERTOPIC_NEIGHBORS = [30,40,50]
+LDA_TOPICS = [19, 21, 29, 31]
+NMF_TOPICS = [8, 9, 11]
+BERTOPIC_MIN_TOPIC_SIZES = [45,50]
+BERTOPIC_NEIGHBORS = [55,60]
 
 
 def load_config(path: Path) -> dict:
