@@ -1,0 +1,22 @@
+random_seed: 42
+train_ratio: 0.8
+preprocessing:
+  max_features: 20000
+  ngram_range:
+  - 1
+  - 1
+  min_df: 2
+  max_df: 0.8
+lda:
+  num_topics: 20
+  max_iter: 20
+nmf:
+  num_topics: 10
+  max_iter: 800
+bertopic:
+  embedding_model: allenai/specter
+  min_topic_size: 40
+  umap_n_neighbors: 50
+  umap_n_components: 5
+  umap_min_dist: 0.0
+output_dir: results

@@ -1,0 +1,190 @@
+"""Select LDA, NMF, and BERTopic parameters using training-corpus C_v coherence."""
+
+from __future__ import annotations
+
+import argparse
+from copy import deepcopy
+from pathlib import Path
+import time
+
+import pandas as pd
+import yaml
+
+from lda_model import fit_lda, topic_keywords as lda_keywords
+from nmf_model import fit_nmf, topic_keywords as nmf_keywords
+from preprocessing import load_datasets
+from splitter import publications_for_researchers, split_researchers
+from topic_utils import coherence_cv
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LDA_TOPICS = [18,20,22,24,26,28,30]
+NMF_TOPICS = [5,7,10,12,15,20]
+BERTOPIC_MIN_TOPIC_SIZES = [20,25,30,35,40]
+BERTOPIC_NEIGHBORS = [30,40,50]
+
+
+def load_config(path: Path) -> dict:
+    """Load selection settings and default model parameters from YAML."""
+    with path.open(encoding="utf-8") as handle:
+        return yaml.safe_load(handle)
+
+
+def training_publications(config: dict) -> pd.DataFrame:
+    """Return only the researcher-level training publications used for selection."""
+    publications, groups = load_datasets(PROJECT_ROOT / "data")
+    researchers = sorted(set(publications["researcher_name"]) & set(groups["researcher_name"]))
+    train_researchers, _ = split_researchers(
+        researchers, config["train_ratio"], config["random_seed"]
+    )
+    return publications_for_researchers(publications, train_researchers)
+
+
+def search_lda(documents: list[str], config: dict) -> pd.DataFrame:
+    """Evaluate each LDA topic-count candidate using C_v coherence."""
+    rows: list[dict[str, object]] = []
+    for num_topics in LDA_TOPICS:
+        started = time.perf_counter()
+        try:
+            parameters = {**config["lda"], "num_topics": num_topics}
+            model = fit_lda(documents, parameters, config["preprocessing"], config["random_seed"])
+            coherence = coherence_cv(lda_keywords(model), documents)
+            error = ""
+        except Exception as exception:
+            coherence = float("nan")
+            error = str(exception)
+        rows.append(
+            {
+                "num_topics": num_topics,
+                "coherence_cv": coherence,
+                "runtime_seconds": time.perf_counter() - started,
+                "error": error,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def search_nmf(documents: list[str], config: dict) -> pd.DataFrame:
+    """Evaluate each NMF topic-count candidate using C_v coherence."""
+    rows: list[dict[str, object]] = []
+    for num_topics in NMF_TOPICS:
+        started = time.perf_counter()
+        try:
+            parameters = {**config["nmf"], "num_topics": num_topics}
+            model = fit_nmf(documents, parameters, config["preprocessing"], config["random_seed"])
+            coherence = coherence_cv(nmf_keywords(model), documents)
+            error = ""
+        except Exception as exception:
+            coherence = float("nan")
+            error = str(exception)
+        rows.append(
+            {
+                "num_topics": num_topics,
+                "coherence_cv": coherence,
+                "runtime_seconds": time.perf_counter() - started,
+                "error": error,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def search_bertopic(
+    embedding_documents: list[str], coherence_documents: list[str], config: dict
+) -> pd.DataFrame:
+    """Evaluate BERTopic candidates using one shared SPECTER embedding matrix."""
+    from bertopic_model import fit_bertopic, noise_statistics, topic_keywords
+    from sentence_transformers import SentenceTransformer
+
+    embedding_model = SentenceTransformer(config["bertopic"]["embedding_model"])
+    embeddings = embedding_model.encode(embedding_documents, show_progress_bar=False)
+
+    rows: list[dict[str, object]] = []
+    for min_topic_size in BERTOPIC_MIN_TOPIC_SIZES:
+        for umap_n_neighbors in BERTOPIC_NEIGHBORS:
+            started = time.perf_counter()
+            try:
+                parameters = {
+                    **config["bertopic"],
+                    "min_topic_size": min_topic_size,
+                    "umap_n_neighbors": umap_n_neighbors,
+                }
+                model = fit_bertopic(
+                    embedding_documents,
+                    parameters,
+                    config["random_seed"],
+                    embedding_model=embedding_model,
+                    embeddings=embeddings,
+                )
+                words = [keywords for _, keywords in topic_keywords(model)]
+                coherence = coherence_cv(words, coherence_documents)
+                noise_docs, _ = noise_statistics(model)
+                actual_topics = len(words)
+                error = ""
+            except Exception as exception:
+                coherence = float("nan")
+                actual_topics = float("nan")
+                noise_docs = float("nan")
+                error = str(exception)
+            rows.append(
+                {
+                    "min_topic_size": min_topic_size,
+                    "umap_n_neighbors": umap_n_neighbors,
+                    "actual_topics": actual_topics,
+                    "noise_docs": noise_docs,
+                    "coherence_cv": coherence,
+                    "runtime_seconds": time.perf_counter() - started,
+                    "error": error,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def rank_results(results: pd.DataFrame) -> pd.DataFrame:
+    """Sort candidates by coherence and add a one-based rank column."""
+    ranked = results.sort_values("coherence_cv", ascending=False, na_position="last").reset_index(drop=True)
+    ranked.insert(0, "rank", range(1, len(ranked) + 1))
+    return ranked
+
+
+def best_row(results: pd.DataFrame, model_name: str) -> pd.Series:
+    """Return the highest-coherence valid candidate or fail with an explicit error."""
+    valid = results.dropna(subset=["coherence_cv"])
+    if valid.empty:
+        raise RuntimeError(f"No valid {model_name} candidates. Inspect its search CSV for errors.")
+    return valid.loc[valid["coherence_cv"].idxmax()]
+
+
+def main(config_path: Path) -> None:
+    """Run all parameter searches and save their CSVs plus a runnable best config."""
+    config = load_config(config_path)
+    publications = training_publications(config)
+    bow_documents = publications["bow_document"].tolist()
+    embedding_documents = publications["document"].tolist()
+    output_dir = PROJECT_ROOT / config["output_dir"] / "parameter_selection"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    lda_results = rank_results(search_lda(bow_documents, config))
+    nmf_results = rank_results(search_nmf(bow_documents, config))
+    bertopic_results = rank_results(search_bertopic(embedding_documents, bow_documents, config))
+    lda_results.to_csv(output_dir / "lda_search.csv", index=False)
+    nmf_results.to_csv(output_dir / "nmf_search.csv", index=False)
+    bertopic_results.to_csv(output_dir / "bertopic_search.csv", index=False)
+
+    lda_best = best_row(lda_results, "LDA")
+    nmf_best = best_row(nmf_results, "NMF")
+    bertopic_best = best_row(bertopic_results, "BERTopic")
+    best_config = deepcopy(config)
+    best_config["lda"]["num_topics"] = int(lda_best["num_topics"])
+    best_config["nmf"]["num_topics"] = int(nmf_best["num_topics"])
+    best_config["bertopic"]["min_topic_size"] = int(bertopic_best["min_topic_size"])
+    best_config["bertopic"]["umap_n_neighbors"] = int(bertopic_best["umap_n_neighbors"])
+    with (output_dir / "best_config.yaml").open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(best_config, handle, sort_keys=False)
+    print(f"Saved parameter-selection results to {output_dir}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "config.yaml")
+    arguments = parser.parse_args()
+    main(arguments.config)
