@@ -1,6 +1,6 @@
 # Researcher-to-Research-Group Recommendation
 
-This project compares TF-IDF, LDA, NMF, and BERTopic using `allenai/specter`
+This project compares LDA, NMF, and BERTopic using `allenai/specter`
 embeddings to recommend research groups from publication titles and abstracts.
 
 ## Method
@@ -13,7 +13,7 @@ embeddings to recommend research groups from publication titles and abstracts.
 - Every researcher profile is the mean of that researcher's publication vectors.
   Every group profile is the mean of its training members' profiles.
 - All models use cosine similarity. Researchers may have multiple relevant groups.
-- TF-IDF, LDA, and NMF use lowercase alphanumeric text with NLTK English and
+- LDA and NMF use lowercase alphanumeric text with NLTK English and
   research-jargon stopwords removed. BERTopic receives original title-plus-abstract
   text for SPECTER embeddings and applies the same stopwords only to c-TF-IDF topics.
 
@@ -42,7 +42,7 @@ python src/experiment.py --config results/parameter_selection/best_config.yaml
 ## Outputs
 
 - `results/dataset_statistics.csv` — dataset and researcher-split summary.
-- `results/model_statistics.csv` — vocabulary size, topic counts, C_v coherence,
+- `results/model_statistics.csv` — topic counts, C_v coherence,
   and BERTopic noise statistics.
 - `results/runtime_statistics.csv` — training, recommendation/inference, and total
   runtime per representation.

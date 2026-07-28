@@ -21,7 +21,6 @@ from preprocessing import load_datasets
 from profile_builder import average_researcher_profiles, build_group_profiles, ground_truth_groups
 from recommender import rank_groups
 from splitter import publications_for_researchers, split_researchers
-from tfidf_model import fit_tfidf
 from topic_utils import coherence_cv, topics_frame
 
 
@@ -105,11 +104,7 @@ def run_model(
     topics: pd.DataFrame | None = None
     statistics: dict[str, object] = {"model": model_name}
 
-    if model_name == "tfidf":
-        model = fit_tfidf(train_bow_documents, config["preprocessing"])
-        train_vectors = model.transform(train_bow_documents)
-        statistics["vocabulary_size"] = len(model.get_feature_names_out())
-    elif model_name in {"lda", "nmf"}:
+    if model_name in {"lda", "nmf"}:
         if model_name == "lda":
             model = fit_lda(
                 train_bow_documents, config["lda"], config["preprocessing"], config["random_seed"]
@@ -153,9 +148,7 @@ def run_model(
     training_time = time.perf_counter() - started
 
     started = time.perf_counter()
-    if model_name == "tfidf":
-        test_vectors = model.transform(test_bow_documents)
-    elif model_name == "lda":
+    if model_name == "lda":
         test_vectors = lda_vectors(model, test_bow_documents)
     elif model_name == "nmf":
         test_vectors = nmf_vectors(model, test_bow_documents)
@@ -196,7 +189,7 @@ def main(config_path: Path) -> None:
     recommendation_tables: list[pd.DataFrame] = []
     ranking_tables: list[pd.DataFrame] = []
     topic_tables: dict[str, pd.DataFrame] = {}
-    for model_name in ("tfidf", "lda", "nmf", "bertopic"):
+    for model_name in ("lda", "nmf", "bertopic"):
         print(f"Running {model_name}...")
         run = run_model(model_name, train_publications, test_publications, groups, config)
         metrics_rows.append({"model": model_name, **evaluate_rankings(run.rankings, truth)})
