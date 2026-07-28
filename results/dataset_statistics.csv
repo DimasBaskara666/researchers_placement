@@ -1,0 +1,10 @@
+statistic,value
+number_of_publications,11111.0
+number_of_researchers,3257.0
+number_of_research_groups,12.0
+training_researchers,2605.0
+testing_researchers,652.0
+average_publications_per_researcher,6.131409272336506
+minimum_publications_per_researcher,1.0
+maximum_publications_per_researcher,59.0
+average_researchers_per_group,952.5

@@ -1,0 +1,5 @@
+rank,min_topic_size,umap_n_neighbors,actual_topics,noise_docs,coherence_cv,runtime_seconds,error
+1,50,60,38.0,0.0,0.7587653250186284,72.85396490001585,
+2,45,55,41.0,0.0,0.7488911607893989,147.51927209997666,
+3,45,60,,,,60.35712000000058,unable to interpret topic as either a list of tokens or a list of ids
+4,50,55,,,,53.54520949997823,unable to interpret topic as either a list of tokens or a list of ids

@@ -1,0 +1,5 @@
+model,vocabulary_size,number_of_topics,coherence_cv,coherence_note,noise_documents,noise_percentage
+tfidf,20000.0,,,,,
+lda,,29.0,0.5216250560281456,,,
+nmf,,8.0,0.6895370781180916,,,
+bertopic,,38.0,0.7587653250186284,,0.0,0.0
