@@ -347,11 +347,12 @@ def plot_hyperparameter_search(param_dir: Path = RESULTS_DIR / "parameter_select
     return True
 
 
-def plot_topic_coherence_comparison(
+def plot_model_quality_and_runtime(
     model_stats_path: Path = RESULTS_DIR / "model_statistics.csv",
     param_dir: Path = RESULTS_DIR / "parameter_selection",
+    runtime_path: Path = RESULTS_DIR / "runtime_statistics.csv",
 ) -> bool:
-    """Plot a grouped bar chart comparing the final Topic Coherence of LDA, NMF, and BERTopic."""
+    """Compare topic coherence and runtime in one model-aligned figure."""
     coherence_data: dict[str, float] = {}
 
     if model_stats_path.exists():
@@ -372,21 +373,39 @@ def plot_topic_coherence_comparison(
             if not valid.empty:
                 coherence_data[model] = float(valid["coherence_cv"].max())
 
-    if not coherence_data:
+    if not coherence_data or not runtime_path.exists():
         return False
 
-    models = [m for m in ["lda", "nmf", "bertopic"] if m in coherence_data]
+    runtime = pd.read_csv(runtime_path)
+    runtime["model"] = runtime["model"].astype(str).str.lower()
+    runtime = runtime[runtime["model"].isin(MODEL_ORDER)].set_index("model")
+
+    models = [
+        model for model in MODEL_ORDER
+        if model in coherence_data and model in runtime.index
+    ]
+    if not models:
+        return False
+
+    runtime = runtime.reindex(models)
     scores = [coherence_data[m] for m in models]
     labels = [display_model(m) for m in models]
     colors = model_colours(models)
-
     positions = np.arange(len(models))
-    figure, axis = plt.subplots(figsize=(5.2, 2.7))
-    axis.hlines(positions, 0, scores, color="#D8DEE5", linewidth=1.2, zorder=1)
-    axis.scatter(scores, positions, color=colors, s=72, zorder=3)
+
+    figure, (coherence_axis, runtime_axis) = plt.subplots(
+        1,
+        2,
+        figsize=(7.2, 2.9),
+        gridspec_kw={"width_ratios": (0.85, 1.25)},
+    )
+    coherence_axis.hlines(
+        positions, 0, scores, color="#D8DEE5", linewidth=1.2, zorder=1
+    )
+    coherence_axis.scatter(scores, positions, color=colors, s=72, zorder=3)
 
     for position, score in zip(positions, scores, strict=True):
-        axis.text(
+        coherence_axis.text(
             score + 0.018,
             position,
             f"{score:.3f}",
@@ -396,20 +415,68 @@ def plot_topic_coherence_comparison(
             fontweight="semibold",
         )
 
-    axis.set_yticks(positions, labels)
-    axis.set_xlim(0, 1)
-    axis.set_xlabel("Topic Coherence ($C_v$)")
-    axis.grid(axis="x")
+    coherence_axis.set_yticks(positions, labels)
+    coherence_axis.set_xlim(0, 1)
+    coherence_axis.set_xlabel("Topic Coherence ($C_v$)")
+    coherence_axis.set_title("(a) Topic coherence", loc="left")
+    coherence_axis.grid(axis="x")
 
-    figure.tight_layout()
-    save_figure(figure, "topic_coherence_comparison")
+    train_times = runtime["training_time_seconds"].to_numpy(dtype=float)
+    inference_times = runtime["recommendation_inference_time_seconds"].to_numpy(dtype=float)
+    height = 0.30
+    training_bars = runtime_axis.barh(
+        positions + height / 2,
+        train_times,
+        height=height,
+        color=colors,
+    )
+    inference_bars = runtime_axis.barh(
+        positions - height / 2,
+        inference_times,
+        height=height,
+        facecolor="white",
+        edgecolor=colors,
+        hatch="///",
+        linewidth=1.2,
+    )
+
+    for bars, values in ((training_bars, train_times), (inference_bars, inference_times)):
+        for bar, value in zip(bars, values, strict=True):
+            runtime_axis.text(
+                value * 1.08,
+                bar.get_y() + bar.get_height() / 2,
+                f"{value:.1f} s",
+                ha="left",
+                va="center",
+                fontsize=7.5,
+            )
+
+    runtime_axis.set_xscale("log")
+    runtime_axis.set_yticks(positions, labels)
+    runtime_axis.set_xlabel("Execution Time (Seconds, Log Scale)")
+    runtime_axis.set_title("(b) Computational runtime", loc="left")
+    runtime_axis.grid(axis="x", which="major")
+    runtime_axis.legend(
+        handles=[
+            Patch(facecolor="#777777", label="Training"),
+            Patch(facecolor="white", edgecolor="#777777", hatch="///", label="Inference"),
+        ],
+        frameon=False,
+        loc="center right",
+    )
+    upper_limit = max(train_times.max(), inference_times.max()) * 2.2
+    lower_limit = min(train_times.min(), inference_times.min()) / 1.8
+    runtime_axis.set_xlim(lower_limit, upper_limit)
+
+    figure.subplots_adjust(left=0.10, right=0.99, bottom=0.22, top=0.90, wspace=0.28)
+    save_figure(figure, "model_quality_and_runtime")
     return True
 
 
 # --- Stage 4 & 5: Recommendation & Evaluation Figures ---
 
 def plot_recommendation_performance(metrics: pd.DataFrame) -> bool:
-    """Plot Precision, Recall, F1, and NDCG curves across available cutoffs."""
+    """Plot cutoff-based metrics and scalar MRR in a balanced five-panel figure."""
     metrics = metrics.copy()
     metrics["model"] = metrics["model"].astype(str).str.lower()
     metrics = metrics[metrics["model"].isin(MODEL_ORDER)].set_index("model")
@@ -419,11 +486,23 @@ def plot_recommendation_performance(metrics: pd.DataFrame) -> bool:
 
     families = [(label, metric_columns(metrics, prefix)) for label, prefix in METRIC_FAMILIES.items()]
     families = [(label, columns) for label, columns in families if columns]
-    if not families:
+    if not families or "mrr" not in metrics.columns:
         return False
 
-    figure, axes = plt.subplots(2, 2, figsize=(7.2, 5.0), sharex=True, sharey=True)
-    for axis, (label, columns) in zip(axes.ravel(), families, strict=True):
+    figure = plt.figure(figsize=(7.2, 4.8))
+    layout = figure.add_gridspec(2, 6)
+    trend_axes = [
+        figure.add_subplot(layout[0, 0:2]),
+        figure.add_subplot(layout[0, 2:4]),
+        figure.add_subplot(layout[0, 4:6]),
+        figure.add_subplot(layout[1, 0:3]),
+    ]
+    mrr_axis = figure.add_subplot(layout[1, 3:6])
+
+    panel_labels = ("a", "b", "c", "d")
+    for axis, panel, (label, columns) in zip(
+        trend_axes, panel_labels, families, strict=True
+    ):
         cutoffs = [cutoff for cutoff, _ in columns]
         metric_names = [column for _, column in columns]
         for model in models:
@@ -438,15 +517,45 @@ def plot_recommendation_performance(metrics: pd.DataFrame) -> bool:
                 markerfacecolor="white",
                 markeredgewidth=1.2,
             )
-        axis.set_title(label)
+        axis.set_title(f"({panel}) {label}", loc="left")
         axis.set_xticks(cutoffs)
+        axis.set_xlabel("Cutoff $K$")
         axis.set_ylim(0, 1)
         axis.grid(axis="y")
-    axes[1, 0].set_xlabel("Cutoff $K$")
-    axes[1, 1].set_xlabel("Cutoff $K$")
-    axes[0, 0].set_ylabel("Score")
-    axes[1, 0].set_ylabel("Score")
-    handles, labels = axes[0, 0].get_legend_handles_labels()
+
+    trend_axes[0].set_ylabel("Score")
+    trend_axes[3].set_ylabel("Score")
+
+    mrr_values = pd.to_numeric(metrics.loc[models, "mrr"]).to_numpy(dtype=float)
+    positions = np.arange(len(models))
+    mrr_axis.hlines(
+        positions, 0, mrr_values, color="#D8DEE5", linewidth=1.2, zorder=1
+    )
+    for position, model, value in zip(positions, models, mrr_values, strict=True):
+        mrr_axis.scatter(
+            value,
+            position,
+            color=MODEL_COLOURS[model],
+            marker=MODEL_MARKERS[model],
+            s=56,
+            zorder=3,
+        )
+        mrr_axis.text(
+            value + 0.025,
+            position,
+            f"{value:.3f}",
+            ha="left",
+            va="center",
+            fontsize=7.5,
+            fontweight="semibold",
+        )
+    mrr_axis.set_title("(e) MRR", loc="left")
+    mrr_axis.set_yticks(positions, [display_model(model) for model in models])
+    mrr_axis.set_xlim(0, 1)
+    mrr_axis.set_xlabel("Score")
+    mrr_axis.grid(axis="x")
+
+    handles, labels = trend_axes[0].get_legend_handles_labels()
     figure.legend(
         handles,
         labels,
@@ -455,7 +564,14 @@ def plot_recommendation_performance(metrics: pd.DataFrame) -> bool:
         bbox_to_anchor=(0.5, 1.0),
         ncol=len(models),
     )
-    figure.subplots_adjust(left=0.09, right=0.99, bottom=0.10, top=0.88, wspace=0.16, hspace=0.28)
+    figure.subplots_adjust(
+        left=0.09,
+        right=0.99,
+        bottom=0.10,
+        top=0.88,
+        wspace=0.72,
+        hspace=0.52,
+    )
     save_figure(figure, "recommendation_performance")
     return True
 
@@ -565,76 +681,6 @@ def plot_rank_distribution(rankings_path: Path = RESULTS_DIR / "rankings.csv") -
     return True
 
 
-# --- Stage 6: Computational Figures ---
-
-def plot_computational_runtime(runtime_path: Path = RESULTS_DIR / "runtime_statistics.csv") -> bool:
-    """Plot separate training and inference runtimes on a logarithmic scale."""
-    if not runtime_path.exists():
-        return False
-
-    df = pd.read_csv(runtime_path)
-    df["model"] = df["model"].astype(str).str.lower()
-    df = df[df["model"].isin(MODEL_ORDER)].set_index("model")
-    models = [model for model in MODEL_ORDER if model in df.index]
-    if not models:
-        return False
-    df = df.reindex(models)
-
-    train_times = df["training_time_seconds"].to_numpy(dtype=float)
-    inference_times = df["recommendation_inference_time_seconds"].to_numpy(dtype=float)
-    positions = np.arange(len(models))
-    model_colours = [MODEL_COLOURS[model] for model in models]
-    height = 0.30
-
-    figure, axis = plt.subplots(figsize=(5.8, 3.0))
-    training_bars = axis.barh(
-        positions + height / 2,
-        train_times,
-        height=height,
-        color=model_colours,
-    )
-    inference_bars = axis.barh(
-        positions - height / 2,
-        inference_times,
-        height=height,
-        facecolor="white",
-        edgecolor=model_colours,
-        hatch="///",
-        linewidth=1.2,
-    )
-
-    for bars, values in ((training_bars, train_times), (inference_bars, inference_times)):
-        for bar, value in zip(bars, values, strict=True):
-            axis.text(
-                value * 1.08,
-                bar.get_y() + bar.get_height() / 2,
-                f"{value:.1f} s",
-                ha="left",
-                va="center",
-                fontsize=7.5,
-            )
-
-    axis.set_xscale("log")
-    axis.set_yticks(positions, [display_model(model) for model in models])
-    axis.set_xlabel("Execution Time (Seconds, Log Scale)")
-    axis.grid(axis="x", which="major")
-    axis.legend(
-        handles=[
-            Patch(facecolor="#777777", label="Training"),
-            Patch(facecolor="white", edgecolor="#777777", hatch="///", label="Inference"),
-        ],
-        frameon=False,
-        loc="lower right",
-    )
-    upper_limit = max(train_times.max(), inference_times.max()) * 2.2
-    lower_limit = min(train_times.min(), inference_times.min()) / 1.8
-    axis.set_xlim(lower_limit, upper_limit)
-
-    figure.tight_layout()
-    save_figure(figure, "computational_runtime")
-    return True
-
-
 def main() -> None:
     """Generate all figures supported by experiment metrics and parameter selection results."""
     configure_style()
@@ -654,8 +700,8 @@ def main() -> None:
     # Hyperparameter & Topic figures
     if plot_hyperparameter_search(param_dir):
         generated.append("hyperparameter_search")
-    if plot_topic_coherence_comparison(model_stats_path, param_dir):
-        generated.append("topic_coherence_comparison")
+    if plot_model_quality_and_runtime(model_stats_path, param_dir, runtime_path):
+        generated.append("model_quality_and_runtime")
 
     # Performance & Recommendation figures
     if metrics_path.exists():
@@ -668,10 +714,6 @@ def main() -> None:
         generated.append("per_group_performance")
     if plot_rank_distribution(rankings_path):
         generated.append("rank_distribution")
-
-    # Runtime figure
-    if plot_computational_runtime(runtime_path):
-        generated.append("computational_runtime")
 
     if not generated:
         raise ValueError("No figures could be generated. Check result CSV files.")
