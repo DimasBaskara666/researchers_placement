@@ -19,9 +19,9 @@ from topic_utils import coherence_cv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LDA_TOPICS = [19, 21, 29, 31]
-NMF_TOPICS = [8, 9, 11]
-BERTOPIC_MIN_TOPIC_SIZES = [45,50]
-BERTOPIC_NEIGHBORS = [55,60]
+NMF_TOPICS = [9, 11, 12, 15]
+BERTOPIC_MIN_TOPIC_SIZES = [40, 45, 50]
+BERTOPIC_NEIGHBORS = [50, 55, 60]
 
 
 def load_config(path: Path) -> dict:
@@ -154,37 +154,52 @@ def best_row(results: pd.DataFrame, model_name: str) -> pd.Series:
     return valid.loc[valid["coherence_cv"].idxmax()]
 
 
-def main(config_path: Path) -> None:
-    """Run all parameter searches and save their CSVs plus a runnable best config."""
+def save_results(
+    model_name: str, results: pd.DataFrame, config: dict, output_dir: Path
+) -> None:
+    """Save one model's search results and update only its best-config values."""
+    results.to_csv(output_dir / f"{model_name}_search.csv", index=False)
+    config_path = output_dir / "best_config.yaml"
+    best_config = load_config(config_path) if config_path.exists() else deepcopy(config)
+    best = best_row(results, model_name.upper())
+    if model_name == "lda":
+        best_config["lda"]["num_topics"] = int(best["num_topics"])
+    elif model_name == "nmf":
+        best_config["nmf"]["num_topics"] = int(best["num_topics"])
+    else:
+        best_config["bertopic"]["min_topic_size"] = int(best["min_topic_size"])
+        best_config["bertopic"]["umap_n_neighbors"] = int(best["umap_n_neighbors"])
+    with config_path.open("w", encoding="utf-8") as handle:
+        yaml.safe_dump(best_config, handle, sort_keys=False)
+
+
+def main(config_path: Path, selected_model: str) -> None:
+    """Run only the requested parameter searches and update their outputs."""
     config = load_config(config_path)
     publications = training_publications(config)
-    bow_documents = publications["bow_document"].tolist()
-    embedding_documents = publications["document"].tolist()
     output_dir = PROJECT_ROOT / config["output_dir"] / "parameter_selection"
     output_dir.mkdir(parents=True, exist_ok=True)
+    if selected_model == "all":
+        with (output_dir / "best_config.yaml").open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(deepcopy(config), handle, sort_keys=False)
 
-    lda_results = rank_results(search_lda(bow_documents, config))
-    nmf_results = rank_results(search_nmf(bow_documents, config))
-    bertopic_results = rank_results(search_bertopic(embedding_documents, bow_documents, config))
-    lda_results.to_csv(output_dir / "lda_search.csv", index=False)
-    nmf_results.to_csv(output_dir / "nmf_search.csv", index=False)
-    bertopic_results.to_csv(output_dir / "bertopic_search.csv", index=False)
-
-    lda_best = best_row(lda_results, "LDA")
-    nmf_best = best_row(nmf_results, "NMF")
-    bertopic_best = best_row(bertopic_results, "BERTopic")
-    best_config = deepcopy(config)
-    best_config["lda"]["num_topics"] = int(lda_best["num_topics"])
-    best_config["nmf"]["num_topics"] = int(nmf_best["num_topics"])
-    best_config["bertopic"]["min_topic_size"] = int(bertopic_best["min_topic_size"])
-    best_config["bertopic"]["umap_n_neighbors"] = int(bertopic_best["umap_n_neighbors"])
-    with (output_dir / "best_config.yaml").open("w", encoding="utf-8") as handle:
-        yaml.safe_dump(best_config, handle, sort_keys=False)
-    print(f"Saved parameter-selection results to {output_dir}")
+    models = ("lda", "nmf", "bertopic") if selected_model == "all" else (selected_model,)
+    for model_name in models:
+        if model_name == "lda":
+            results = search_lda(publications["bow_document"].tolist(), config)
+        elif model_name == "nmf":
+            results = search_nmf(publications["bow_document"].tolist(), config)
+        else:
+            results = search_bertopic(
+                publications["document"].tolist(), publications["bow_document"].tolist(), config
+            )
+        save_results(model_name, rank_results(results), config, output_dir)
+    print(f"Saved {selected_model} parameter-selection results to {output_dir}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "config.yaml")
+    parser.add_argument("--model", choices=("lda", "nmf", "bertopic", "all"), default="all")
     arguments = parser.parse_args()
-    main(arguments.config)
+    main(arguments.config, arguments.model)

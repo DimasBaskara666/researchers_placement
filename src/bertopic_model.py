@@ -53,7 +53,7 @@ def fit_bertopic(
         strategy="embeddings",
         embeddings=embeddings,
     )
-    model.update_topics(documents, topics=reduced_topics)
+    model.update_topics(documents, topics=reduced_topics, vectorizer_model=vectorizer_model)
     return model
 
 

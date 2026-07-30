@@ -1,9 +1,12 @@
 topic_id,top_keywords
-0,learning | policy | rl | algorithm | algorithms | regret | optimization | reinforcement | optimal | gradient
-1,3d | view | scene | object | reconstruction | 2d | scenes | point | pose | objects
-2,language | llms | models | reasoning | llm | large | knowledge | tasks | visual | multimodal
-3,video | videos | temporal | motion | frame | frames | long | action | event | audio
-4,robot | manipulation | object | robots | robotic | planning | motion | objects | human | task
-5,graph | graphs | neural | networks | node | gnns | nodes | gnn | structure | network
-6,data | learning | training | domain | model | supervised | task | label | performance | pre
-7,image | diffusion | text | generation | images | models | editing | generative | model | quality
+0,algorithm | gradient | optimization | regret | linear | algorithms | optimal | neural | stochastic | problem
+1,3d | view | scene | 2d | reconstruction | scenes | point | geometry | rendering | gaussian
+2,language | llms | models | reasoning | llm | large | knowledge | tasks | human | context
+3,video | videos | temporal | motion | frames | frame | long | action | event | audio
+4,robot | robots | robotic | manipulation | planning | motion | every | robotics | tasks | embodiment
+5,graph | graphs | networks | node | gnns | neural | nodes | gnn | structure | information
+6,data | learning | training | domain | model | supervised | label | pre | task | classification
+7,diffusion | generation | models | generative | model | sampling | quality | latent | conditional | denoising
+8,image | text | images | visual | challenge | editing | vision | clip | attention | resolution
+9,policy | rl | learning | reinforcement | agent | offline | reward | agents | policies | exploration
+10,object | objects | detection | segmentation | tracking | pose | hand | centric | estimation | manipulation

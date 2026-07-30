@@ -11,12 +11,12 @@ lda:
   num_topics: 29
   max_iter: 20
 nmf:
-  num_topics: 8
+  num_topics: 11
   max_iter: 800
 bertopic:
   embedding_model: allenai/specter
-  min_topic_size: 50
-  umap_n_neighbors: 60
+  min_topic_size: 45
+  umap_n_neighbors: 50
   umap_n_components: 5
   umap_min_dist: 0.0
 output_dir: results
