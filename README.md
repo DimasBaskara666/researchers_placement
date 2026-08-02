@@ -27,7 +27,6 @@ The study uses 11,111 prepared publication documents from 3,257 researchers acro
 - [Development notes](#development-notes)
 - [Known limitations](#known-limitations)
 - [Future work](#future-work)
-- [Research documentation](#research-documentation)
 - [Citation](#citation)
 - [License](#license)
 - [Contact](#contact)
@@ -45,8 +44,7 @@ The repository provides:
 - publication, researcher, and group representations in each model's topic space;
 - cosine-similarity rankings for all candidate groups;
 - complete and top-K recommendation exports;
-- aggregate ranking metrics, topic statistics, runtimes, and paper figures;
-- implementation, experiment, and results audits for traceability.
+- aggregate ranking metrics, topic statistics, runtimes, and paper figures.
 
 ## Method
 
@@ -282,8 +280,6 @@ The checked-in final results use the selected configuration above.
 
 BERTopic has the highest checked-in value in all 13 recommendation metric columns. NMF has the highest final C_v coherence and the shortest recorded runtime. These statements describe the stored outputs from one fixed researcher split. The experiment does not report confidence intervals or statistical significance tests.
 
-The complete numerical record is available in [the results audit](docs/RESULTS_AUDIT.md).
-
 ## Generated artifacts
 
 ### Experiment tables
@@ -321,8 +317,6 @@ Every figure is available as `.pdf` and `.png` under `results/figures/`.
 .
 |-- config.yaml                       Final experiment configuration
 |-- data/                             Checked-in publication and group CSVs
-|-- docs/                             Audits, equations, and project specification
-|-- paper-docs/                       Conference draft, template, notes, and workflow image
 |-- results/
 |   |-- figures/                      PDF and PNG publication figures
 |   |-- parameter_selection/          Current and archived search results
@@ -349,7 +343,7 @@ Every figure is available as `.pdf` and `.png` under `results/figures/`.
 `-- README.md
 ```
 
-The root-level `*_after_revision.md` files and review documents are working materials for the conference-paper revision. The two data-collection utilities under `src/` are retained for audit context and are not called by the experiment.
+The two data-collection utilities under `src/` are retained for audit context and are not called by the experiment.
 
 ## Reproducibility
 
@@ -369,7 +363,7 @@ Exact reruns still depend on the local environment. Dependency versions and hard
 
 The repository uses plain Python scripts rather than an installable package. Run entry points from the repository root because modules import sibling files directly from `src/`.
 
-There is no automated test suite. For changes to modeling or evaluation code, verify at minimum that the module compiles, run focused checks against the affected function, and compare generated schemas with the audits under `docs/`. Avoid committing regenerated result files unless the experiment itself was intentionally rerun.
+There is no automated test suite. For changes to modeling or evaluation code, verify at minimum that the module compiles, run focused checks against the affected function, and compare generated schemas with expected result schemas. Avoid committing regenerated result files unless the experiment itself was intentionally rerun.
 
 The implementation favors small, independent modules over a framework or experiment manager. New code should preserve the researcher-level split, training-only group profiles, and shared ranking/evaluation path unless the research protocol is intentionally revised.
 
@@ -386,7 +380,7 @@ The implementation favors small, independent modules over a framework or experim
 
 ## Future work
 
-The conference draft identifies several extensions that are not implemented here:
+The project identifies several extensions that are not implemented here:
 
 - repeated researcher splits with uncertainty and significance reporting;
 - evaluation across additional institutions, disciplines, or group taxonomies;
@@ -394,15 +388,6 @@ The conference draft identifies several extensions that are not implemented here
 - citation, collaboration, affiliation, and temporal features;
 - alternatives to mean profile aggregation;
 - ablation of BERTopic's embedding, dimensionality-reduction, clustering, and outlier-reassignment components.
-
-## Research documentation
-
-- [Implementation audit](docs/IMPLEMENTATION_AUDIT.md): code-level pipeline and module dependencies.
-- [Experiment audit](docs/EXPERIMENT_AUDIT.md): protocol, configuration, runtime boundaries, and artifacts.
-- [Results audit](docs/RESULTS_AUDIT.md): authoritative numerical tables and consistency checks.
-- [Implemented equations](docs/Project-Equations_Used.md): formulas tied to source functions.
-- [Product requirements](docs/PRD.md): original implementation scope and constraints.
-- [Conference paper draft](paper-docs/draft-conference-paper-R2-backup.md): current checked-in manuscript backup.
 
 ## Acknowledgements
 
