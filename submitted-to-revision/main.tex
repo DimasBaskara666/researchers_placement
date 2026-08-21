@@ -1,0 +1,75 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+\usepackage{cite}
+\usepackage[bookmarks=false]{hyperref}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows, positioning, fit, arrows.meta}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\PassOptionsToPackage{bookmarks={false}}{hyperref}
+\hypersetup{nolinks=true}
+\hypersetup{final}
+\setlength{\textfloatsep}{6pt plus 2pt minus 2pt}
+\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+\setlength{\floatsep}{4pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{3pt}
+\setlength{\belowcaptionskip}{0pt}
+
+\begin{document}
+
+\title{A Comparative Evaluation of Topic Modeling Methods for Researcher-to-Research-Group Recommendation}
+
+% \author{\IEEEauthorblockN{1\textsuperscript{st} Given Name Surname}
+% \IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
+% \textit{name of organization (of Aff.)}\\
+% City, Country \\
+% email address or ORCID}
+% }
+
+\maketitle
+
+\begin{abstract}
+Matching researchers with suitable research groups can support collaboration and researcher placement, but manual matching is difficult to apply at scale. Publication text provides evidence of research expertise, yet the relative value of classical and contextual topic models for this task remains unclear. This study presents a controlled comparison, rather than a new algorithm, of a BERTopic-based researcher-to-research-group recommendation framework against Latent Dirichlet Allocation (LDA) and Non-negative Matrix Factorization (NMF) under the same experimental pipeline, evaluated on 11,111 publication documents from 3,257 researchers across 12 computer science research groups. Topic vectors from titles and abstracts were averaged into researcher and group profiles and ranked by cosine similarity across 652 test researchers using top-$K$ metrics. BERTopic obtained the highest score on all 13 metrics, with an NDCG@5 of 0.736 and MRR of 0.809, though its margin over LDA was consistently narrow. NMF obtained the highest topic coherence (0.687) but ranked last on every recommendation metric, requiring only 18.8~s of total execution time against 180.3~s for LDA and 971.8~s for BERTopic. Topic coherence therefore does not reliably predict recommendation quality: BERTopic is preferable when ranking accuracy has priority and offline training is acceptable, LDA delivers quality close to BERTopic at a fraction of the cost, and NMF is fastest but least accurate, suiting resource-limited or frequently updated systems.
+\end{abstract}
+\vspace{0.25cm}
+
+\begin{IEEEkeywords}
+BERTopic, scholarly recommender systems, researcher profiling, scientific document analysis, ranking evaluation
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+\input{sections/1_intro}
+
+\section{Related Works}
+\label{sec:related}
+\input{sections/2_review}
+
+\section{Methodology}
+\label{sec:methodology}
+\input{sections/3_method}
+
+\section{Results and Discussion}
+\label{sec:results}
+\input{sections/4_results}
+
+\section{Conclusion}
+\label{sec:conclusion}
+\input{sections/6_conclusion}
+
+\section*{Acknowledgement}
+The authors acknowledge the use of OpenAI Codex (GPT-5.6) as an AI coding assistant for code completion and debugging during the implementation of the experiments, as well as Google NotebookLM to support literature review and reference analysis during the preparation of this manuscript. All AI-assisted content was reviewed, verified, and revised by the authors, who assume full responsibility for the content of this paper.
+
+\bibliographystyle{ieeetr}
+\bibliography{myrefs}
+
+\end{document}

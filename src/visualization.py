@@ -473,9 +473,100 @@ def plot_model_quality_and_runtime(
     return True
 
 
+def plot_topic_distribution_and_samples(
+    model_stats_path: Path = RESULTS_DIR / "model_statistics.csv",
+    topics_dir: Path = RESULTS_DIR / "topics",
+) -> bool:
+    """Plot topic distribution summary and representative topic keyword samples per model."""
+    if not (model_stats_path.exists() and topics_dir.exists()):
+        return False
+
+    stats_df = pd.read_csv(model_stats_path)
+    if stats_df.empty or "model" not in stats_df.columns:
+        return False
+
+    stats_df["model"] = stats_df["model"].astype(str).str.lower()
+    models = [m for m in MODEL_ORDER if m in stats_df["model"].values]
+    if not models:
+        return False
+
+    figure, axes = plt.subplots(1, len(models), figsize=(10.5, 3.4), squeeze=False)
+
+    for idx, model in enumerate(models):
+        axis = axes[0, idx]
+        m_row = stats_df[stats_df["model"] == model].iloc[0]
+        n_topics = int(m_row.get("number_of_topics", 0))
+        c_v = float(m_row.get("coherence_cv", 0.0))
+        color = MODEL_COLOURS[model]
+
+        topic_file = topics_dir / f"{model}_topics.csv"
+        samples: list[str] = []
+        if topic_file.exists():
+            tdf = pd.read_csv(topic_file)
+            if not tdf.empty and "top_keywords" in tdf.columns:
+                for _, srow in tdf.head(3).iterrows():
+                    tid = int(srow.get("topic_id", 0))
+                    kw_raw = str(srow.get("top_keywords", "")).replace(" | ", ", ")
+                    kw_list = [w.strip() for w in kw_raw.split(",") if w.strip()][:4]
+                    samples.append(f"T{tid}: {', '.join(kw_list)}")
+
+        axis.set_title(f"({chr(97 + idx)}) {display_model(model)}", loc="left")
+
+        header_text = f"Topics: {n_topics}  |  Coherence ($C_v$): {c_v:.3f}"
+        axis.text(
+            0.5,
+            0.88,
+            header_text,
+            ha="center",
+            va="center",
+            transform=axis.transAxes,
+            fontsize=8.5,
+            fontweight="semibold",
+            color=color,
+            bbox=dict(
+                boxstyle="round,pad=0.4",
+                facecolor="white",
+                edgecolor=color,
+                linewidth=1.2,
+            ),
+        )
+
+        axis.text(
+            0.05,
+            0.68,
+            "Representative Topic Samples:",
+            transform=axis.transAxes,
+            fontsize=8,
+            fontweight="bold",
+            color="#333333",
+        )
+
+        if samples:
+            y_pos = 0.52
+            for sample in samples:
+                axis.text(
+                    0.05,
+                    y_pos,
+                    f"• {sample}",
+                    transform=axis.transAxes,
+                    fontsize=7.5,
+                    color="#222222",
+                )
+                y_pos -= 0.18
+
+        axis.set_xlim(0, 1)
+        axis.set_ylim(0, 1)
+        axis.axis("off")
+
+    figure.subplots_adjust(left=0.03, right=0.97, bottom=0.08, top=0.88, wspace=0.22)
+    save_figure(figure, "topic_distribution_and_samples")
+    return True
+
+
 # --- Stage 4 & 5: Recommendation & Evaluation Figures ---
 
 def plot_recommendation_performance(metrics: pd.DataFrame) -> bool:
+
     """Plot cutoff-based metrics and scalar MRR in a balanced five-panel figure."""
     metrics = metrics.copy()
     metrics["model"] = metrics["model"].astype(str).str.lower()
@@ -690,6 +781,7 @@ def main() -> None:
     runtime_path = RESULTS_DIR / "runtime_statistics.csv"
     rankings_path = RESULTS_DIR / "rankings.csv"
     param_dir = RESULTS_DIR / "parameter_selection"
+    topics_dir = RESULTS_DIR / "topics"
 
     generated: list[str] = []
 
@@ -702,6 +794,8 @@ def main() -> None:
         generated.append("hyperparameter_search")
     if plot_model_quality_and_runtime(model_stats_path, param_dir, runtime_path):
         generated.append("model_quality_and_runtime")
+    if plot_topic_distribution_and_samples(model_stats_path, topics_dir):
+        generated.append("topic_distribution_and_samples")
 
     # Performance & Recommendation figures
     if metrics_path.exists():
@@ -719,6 +813,7 @@ def main() -> None:
         raise ValueError("No figures could be generated. Check result CSV files.")
 
     print(f"Generated figures: {', '.join(generated)}")
+
 
 
 if __name__ == "__main__":

@@ -1,0 +1,79 @@
+This study developed a BERTopic-based framework for researcher-to-research-group recommendation and compared it with LDA and NMF under one experimental pipeline (Fig.~\ref{fig:framework}): publication-level topic vectors were averaged into researcher profiles, training-researcher profiles formed the group profiles, and cosine similarity between these profiles produced the ranked recommendations.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=6mm and 6mm,
+    box/.style={draw, rounded corners, align=center, minimum height=6mm, font=\scriptsize, fill=blue!6},
+    grp/.style={draw, dashed, inner sep=4pt},
+    arr/.style={-{Stealth[length=1.5mm]}}
+]
+\node[box] (data) {Research\\dataset};
+\node[box, right=of data] (split) {Researcher-level\\80/20 split};
+\node[box, right=of split] (prep) {Preprocessing};
+
+\node[box, below=8mm of split] (lda) {LDA};
+\node[box, left=2mm of lda] (nmf) {NMF};
+\node[box, right=2mm of lda] (bert) {BERTopic};
+\node[grp, fit=(nmf)(lda)(bert), label={[font=\scriptsize]above:Topic modeling (training corpus only)}] (tm) {};
+
+\node[box, below=8mm of tm.south, xshift=-16mm] (trp) {Train researcher\\profiles};
+\node[box, below=8mm of tm.south, xshift=16mm] (tep) {Test researcher\\profiles};
+\node[grp, fit=(trp)(tep), label={[font=\scriptsize]above:Profile construction}] (pc) {};
+
+\node[box, below=5mm of pc.south, xshift=-16mm] (gp) {Group\\profiles};
+\node[box, below=5mm of pc.south, xshift=16mm] (rec) {Group\\recommendation};
+\node[box, below=5mm of gp.south, xshift=16mm] (ev) {Evaluation};
+
+\draw[arr] (data) -- (split);
+\draw[arr] (split) -- (prep);
+\draw[arr] (prep.south) -- ++(0,-3mm) -| (tm.north);
+\draw[arr] (trp) -- (gp);
+\draw[arr] (tep) -- (rec);
+\draw[arr] (gp) -- (rec);
+\draw[arr] (rec) -- (ev);
+\draw[arr] (tm.south) -- ++(0,-3mm) -| (pc.north);
+\end{tikzpicture}
+\caption{Research framework. Data collection, the researcher-level split, and preprocessing are shared across models; LDA, NMF, and BERTopic are then fit only on the training corpus, so the topic representation is the only model-dependent stage in an otherwise identical profile-construction, cosine-similarity ranking, and evaluation pipeline.}
+\label{fig:framework}
+\end{figure}
+
+\subsection{Data Source}
+Researchers and research group data were obtained from CSRankings, publication metadata from DBLP, and abstracts from Semantic Scholar; each record contained a title, abstract, author list, publication year, venue, and DOI when available. The CSRankings research areas defined 12 target research groups. After data validation and preprocessing, the dataset contained 11,111 publication documents from 3,257 researchers, divided into 2,605 training and 652 test researchers using an 80/20 researcher-level split (seed 42) that kept every publication by one researcher in the same partition.
+
+\subsection{Data Preprocessing}
+Each publication document combined its title and abstract; records without usable text or a labeled researcher were excluded. LDA and NMF used bag-of-words text converted to lowercase and stripped of punctuation, non-alphanumeric tokens, common English stopwords, and a small set of generic publication terms (e.g., ``abstract,'' ``paper,'' ``conference,'' ``journal,'' ``manuscript'') that carry no topical information. BERTopic used the original title-and-abstract text with normalized whitespace to preserve information required by the embedding model. Vectorizers were fitted only on training publications, with vocabulary limited to 20,000 features and minimum/maximum document frequencies of 2 and 0.8.
+
+\subsection{Hyperparameter Optimization}
+Hyperparameters were selected using only the training corpus, ranking candidate configurations by topic coherence; the reported grids reflect the final stage of a staged coarse-to-fine search, with the highest-scoring configuration for each model used in the final experiment. The search varied the number of topics for LDA and NMF and, for BERTopic, the HDBSCAN minimum topic size and number of UMAP neighbors. The selected settings were 29 topics and 20 iterations for LDA, 11 topics and 800 iterations for NMF, and for BERTopic a minimum topic size of 45, 50 UMAP neighbors, five UMAP components, and a minimum distance of 0.0. Final recommendation metrics were calculated on the held-out researchers. All models used random seed 42 where supported: LDA, NMF, and UMAP's \texttt{random\_state} were seeded directly; HDBSCAN does not expose a random seed and is deterministic for fixed embeddings and parameters.
+
+\subsection{Topic Modeling}
+LDA, NMF, and BERTopic were fitted to the same training partition, each producing a topic vector for every training and test publication. LDA (scikit-learn's \texttt{LatentDirichletAllocation}) fitted a probabilistic model to document-term count vectors with batch learning, representing each publication as a probability distribution over 29 latent topics. NMF (scikit-learn's \texttt{NMF}) decomposed a TF-IDF document-term matrix into non-negative document-topic and topic-term matrices using NNDSVDa initialization, yielding an 11-dimensional document-topic vector per publication; fitted training vectorizers transformed test publications without refitting. BERTopic encoded publication text with the pretrained \texttt{allenai/specter} model (\texttt{sentence-transformers}); UMAP (\texttt{umap-learn}) reduced the embeddings using cosine distance, and HDBSCAN (\texttt{hdbscan}) formed topic clusters, orchestrated through the \texttt{BERTopic} package. Outliers were reassigned through embedding similarity and topics updated with the same vectorizer for consistency. BERTopic's \texttt{approximate\_distribution()} generated a document-topic probability distribution per publication, used in the recommendation stage rather than single topic labels.
+
+\subsection{Profile Construction}
+All profiles were constructed in the topic space produced by the corresponding model. Let $D_r = \{d_1, d_2, \dots, d_n\}$ denote the publications of researcher $r$, and let $v_d$ be the topic vector of publication $d$. The researcher profile was the arithmetic mean of the publication vectors:
+\begin{equation}
+R_r = \frac{1}{|D_r|} \sum_{d \in D_r} v_d
+\label{eq:profile}
+\end{equation}
+This operation produced one topic profile for each researcher. Research group profiles were built only from training researchers. For a research group with training members $G = \{r_1, r_2, \dots, r_m\}$, the group profile was
+\begin{equation}
+P_G = \frac{1}{|G|} \sum_{r \in G} R_r
+\label{eq:group}
+\end{equation}
+where $R_r$ was the profile of member $r$. Restricting this aggregation to training members prevented test researcher profiles from entering the group representations.
+
+\subsection{Research Group Recommendation}
+Each test researcher profile was compared with all 12 research group profiles using cosine similarity,
+\begin{equation}
+\mathrm{sim}(R_r, P_G) = \frac{R_r \cdot P_G}{\lVert R_r \rVert \, \lVert P_G \rVert}
+\label{eq:cosine}
+\end{equation}
+where $R_r$ is the profile of test researcher $r$ from \eqref{eq:profile} and $P_G$ is the profile of research group $G$ from \eqref{eq:group}. The groups were sorted by decreasing similarity, with an alphabetical secondary order for equal scores. The same ranking procedure was applied to LDA, NMF, and BERTopic profiles, so the topic representation was the only model-dependent part of the recommendation pipeline. The system returned a ranked list rather than a single group because a researcher could have more than one ground-truth research group.
+
+\subsection{Evaluation}
+The ranked groups for each of the 652 test researchers were compared with that researcher's known CSRankings group memberships using Precision@$K$, Recall@$K$, F1-score@$K$, and NDCG@$K$ at $K=1,3,5$: Precision is the proportion of the first $K$ recommendations that were relevant, Recall the proportion of relevant groups retrieved within the first $K$, F1-score their harmonic mean, and NDCG assigns greater value to relevant groups near the top of the ranking; mean reciprocal rank (MRR) measures the inverse rank of the first relevant group. Each metric was the arithmetic mean of per-researcher scores, using the same split, group candidates, profile construction, ranking method, and metrics for all three models.
+
+\subsection{Statistical Significance Testing}
+\label{sec:sigtest}
+Because all metrics were computed on one fixed 80/20 split, cutoff-based Precision, Recall, F1-score, NDCG, and MRR were additionally compared between each model pair using a two-sided Wilcoxon signed-rank test over the 652 matched per-researcher scores; this paired design controls for researcher-level variation since the same test researchers and ground-truth labels were scored by every model. Tied scores contributed a zero difference and were excluded, following the conventional zero-difference handling. Because 13 metrics were tested per model pair, a Bonferroni-corrected threshold of $\alpha = 0.05/13 \approx 0.0038$ is reported alongside the uncorrected $\alpha = 0.05$ to guard against inflated false positives.
